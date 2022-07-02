@@ -368,6 +368,8 @@ public abstract class HystrixCommand<R> extends AbstractCommand<R> implements Hy
      *             via {@code Future.get()} in {@link ExecutionException#getCause()} if invalid arguments or state were used representing a user failure, not a system failure
      * @throws IllegalStateException
      *             if invoked more than once
+     *             调用 #toObservable() 方法的基础上，调用：Observable#toBlocking() 方法 ：将 Observable 转换成阻塞的
+     *
      */
     public Future<R> queue() {
         /*

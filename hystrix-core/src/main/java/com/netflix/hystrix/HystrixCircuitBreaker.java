@@ -175,6 +175,7 @@ public interface HystrixCircuitBreaker {
 
                         @Override
                         public void onNext(HealthCounts hc) {
+                            // 检查我们是否超过了统计 Windows 音量阈值
                             // check if we are past the statisticalWindowVolumeThreshold
                             if (hc.getTotalRequests() < properties.circuitBreakerRequestVolumeThreshold().get()) {
                                 // we are not past the minimum volume threshold for the stat window,
@@ -183,6 +184,7 @@ public interface HystrixCircuitBreaker {
                                 // if it was half-open, we need to wait for a successful command execution
                                 // if it was open, we need to wait for sleep window to elapse
                             } else {
+                                // 错误数小于配置的断路配置数，则不理会
                                 if (hc.getErrorPercentage() < properties.circuitBreakerErrorThresholdPercentage().get()) {
                                     //we are not past the minimum error threshold for the stat window,
                                     // so no change to circuit status.
@@ -190,6 +192,7 @@ public interface HystrixCircuitBreaker {
                                     // if it was half-open, we need to wait for a successful command execution
                                     // if it was open, we need to wait for sleep window to elapse
                                 } else {
+                                    // 错误数大于等于配置的断路配置数，则开启断路器
                                     // our failure rate is too high, we need to set the state to OPEN
                                     if (status.compareAndSet(Status.CLOSED, Status.OPEN)) {
                                         circuitOpened.set(System.currentTimeMillis());
@@ -202,6 +205,7 @@ public interface HystrixCircuitBreaker {
 
         @Override
         public void markSuccess() {
+            // 半开状态下的一个请求执行成功，断路器关闭
             if (status.compareAndSet(Status.HALF_OPEN, Status.CLOSED)) {
                 //This thread wins the race to close the circuit - it resets the stream to start it over from 0
                 metrics.resetStream();
@@ -253,6 +257,10 @@ public interface HystrixCircuitBreaker {
             }
         }
 
+        /**
+         * 是否在睡眠窗口时间外（默认5秒内处于睡眠窗口内，不提供对外请求）
+         * @return
+         */
         private boolean isAfterSleepWindow() {
             final long circuitOpenTime = circuitOpened.get();
             final long currentTime = System.currentTimeMillis();
@@ -262,15 +270,19 @@ public interface HystrixCircuitBreaker {
 
         @Override
         public boolean attemptExecution() {
+            // 若是断路器状态开启，返回false，不可执行
             if (properties.circuitBreakerForceOpen().get()) {
                 return false;
             }
+            // 若是断路器状态关闭，返回true，可执行
             if (properties.circuitBreakerForceClosed().get()) {
                 return true;
             }
+            // 关闭数值为关闭
             if (circuitOpened.get() == -1) {
                 return true;
             } else {
+                // 过了睡眠窗口期，cas状态更新为半开状态的请求返回true结果
                 if (isAfterSleepWindow()) {
                     //only the first request after sleep window should execute
                     //if the executing command succeeds, the status will transition to CLOSED
